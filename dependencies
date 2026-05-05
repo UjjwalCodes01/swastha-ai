@@ -1,0 +1,65 @@
+AI and LLM APIs
+Anthropic Claude API is your primary LLM for summarisation, change narration, and report generation. You'll use claude-opus-4 for complex reasoning tasks and claude-haiku for fast, cheap bulk passes. Pricing is per token — budget roughly ₹2,000–8,000 per month depending on volume during development. For the on-premises Stage 2 round, have an offline fallback ready.
+Ollama is that offline fallback. It runs Llama 3, Mistral, and other open-source models entirely on your own hardware. During the CDSCO on-premises round you may not have internet access, so having Ollama running with Llama 3.1 8B means your summarisation and narration modules keep working without Claude.
+HuggingFace Hub is where you pull pre-trained models from — the BERT model for SAE classification, sentence-transformer models for embeddings, spaCy models. Free to use, just needs internet at model download time. After downloading, models run locally.
+OpenAI API is optional but useful as a fallback if Claude is unavailable. Not required if you have Ollama as your offline fallback.
+
+Document Processing
+PyMuPDF (fitz) — free, open-source Python library. Your primary tool for extracting native text, tables, and images from PDFs. No API key needed.
+Tesseract OCR — free, open-source. Google's OCR engine for scanned pages. Install on the server, call it from Python via pytesseract. Supports Hindi and other Indian languages out of the box.
+Apache Tika — free, open-source Java-based tool that extracts text from virtually any file format. Your safety net for unusual formats like older DOCX versions, RTF, or proprietary formats some applicants might submit.
+Camelot or pdfplumber — free Python libraries specifically for extracting tables from PDFs. PyMuPDF handles basic tables but these handle complex multi-column regulatory tables much better.
+
+NLP and Machine Learning
+spaCy — free, open-source. The NLP backbone for named entity recognition. Download the en_core_web_lg model for best accuracy.
+Microsoft Presidio — free, open-source. Your PII detection and anonymisation engine. Built specifically for this use case, maintained by Microsoft. No API key needed.
+HuggingFace Transformers — free, open-source Python library. Used to load, fine-tune, and run BERT and other transformer models for your SAE classifier.
+sentence-transformers — free, open-source. Generates the embeddings you store in ChromaDB. The all-mpnet-base-v2 model is your best general-purpose choice.
+FAISS — free, open-source from Meta. Your vector similarity engine for duplicate detection. Runs in-memory, extremely fast.
+LangChain — free, open-source. Your orchestration framework that chains together LLM calls, retrieval, and tool use. This is what coordinates the four modules.
+
+Infrastructure and Backend
+FastAPI — free, open-source Python web framework. Your entire backend API is built on this.
+Apache Kafka — free, open-source. Your message bus. For the hackathon, you can run a single-node Kafka instance on Docker. For production, use a three-node cluster.
+Redis — free, open-source. Caching layer for session state, rate limiting, and short-lived queue state.
+PostgreSQL — free, open-source. Your primary relational database.
+MinIO — free, open-source. S3-compatible object storage that runs on your own servers. Critical for the on-premises Stage 2 round since you won't be pushing patient documents to AWS.
+ChromaDB — free, open-source. Your vector database for embeddings and semantic search.
+Docker and Docker Compose — free. Every service runs in a container. You can spin the entire platform on any machine with one command.
+Kubernetes (K8s) — free, open-source. For production deployment and scaling. For the hackathon demo, Docker Compose is sufficient. Mention K8s in your architecture presentation to show production readiness.
+Nginx — free, open-source. Reverse proxy sitting in front of all your FastAPI services. Handles SSL termination, load balancing, and rate limiting at the network level.
+
+Frontend
+React — free, open-source. Your reviewer dashboard UI.
+TanStack Query (React Query) — free, open-source. Handles all API calls, caching, and loading states in the dashboard.
+Recharts or Apache ECharts — free, open-source. For analytics charts on the dashboard — submission volumes, SAE trends, completeness score distributions.
+WeasyPrint — free, open-source Python library. Converts your HTML report templates to polished PDFs. This is how you generate CDSCO-format inspection reports.
+
+Security
+Keycloak — free, open-source identity and access management. Handles login, JWT issuance, role-based access control, and MFA. This is enterprise-grade auth without writing auth code yourself. CDSCO reviewers, SUGAM operators, and admin staff all get different roles and permissions.
+HashiCorp Vault — free, open-source. Stores all secrets — API keys, database passwords, encryption keys. Your application never has secrets in environment variables or config files. Everything is pulled from Vault at runtime. Auditors love this.
+Let's Encrypt via Certbot — free. TLS certificates for all your HTTPS endpoints.
+
+Monitoring and Observability
+Prometheus — free, open-source. Scrapes metrics from all your services — request counts, latency, error rates, model inference times.
+Grafana — free, open-source. Dashboards on top of Prometheus data. You want one dashboard per module showing throughput, error rate, and AI confidence score distributions.
+ELK Stack (Elasticsearch + Logstash + Kibana) — free, open-source. Centralised logging across all services. When something breaks at 2am, you find the root cause in minutes instead of hours.
+Sentry — free tier available, paid for higher volume. Catches and groups application errors in real time, with full stack traces. The free tier is sufficient for the hackathon.
+
+Government and Regulatory APIs
+SUGAM Portal API — provided by CDSCO. You'll need to formally request API credentials from the hackathon organisers. This is the integration that makes your solution real rather than simulated.
+MD Online Portal API — same as above, also from CDSCO. Request both together.
+DigiLocker API — free, government-provided. Lets applicants submit verified documents directly from their DigiLocker account. Adds legitimacy to your document authenticity chain and aligns with Digital India initiative, which judges will notice.
+Aadhaar Offline KYC API (via UIDAI) — free for government use cases. For verifying applicant identity during submission without storing Aadhaar numbers. You store only the verification token, not the Aadhaar itself — this is the DPDP-compliant way.
+India Post Pincode API — free, public. Validates address fields in submissions. Tiny detail but eliminates a class of data quality issues.
+
+Communication and Notifications
+Firebase Cloud Messaging (FCM) — free tier is generous. Push notifications to the mobile reviewer app when a high-priority SAE comes in.
+Twilio or MSG91 — MSG91 is the Indian alternative and cheaper for Indian SMS. For SMS alerts to reviewers on critical cases. MSG91 has a free trial, then roughly ₹0.15–0.20 per SMS.
+SendGrid or AWS SES — for email notifications. SendGrid free tier gives 100 emails/day which is fine for development. AWS SES is cheaper at scale — roughly ₹70 per 10,000 emails.
+
+Training Data and Fine-tuning
+PubMed API — free, provided by NIH. Gives you access to millions of biomedical abstracts. Use this to build a domain-specific corpus for fine-tuning your embedding model and BERT classifier.
+CDSCO Public Guidance Documents — free, available on the CDSCO website. Parse these PDFs to build your rules engine and to teach your LLM about Indian regulatory terminology.
+Weights and Biases (W&B) — free tier available. Tracks your model training experiments — loss curves, accuracy metrics, hyperparameter comparisons. When you fine-tune the SAE BERT classifier, you use W&B to know which training run actually improved things.
+Google Colab or Kaggle Notebooks — free GPU access for initial model fine-tuning. Once you have a trained model, export it and run it locally.
