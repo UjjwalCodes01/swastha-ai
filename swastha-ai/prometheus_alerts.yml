@@ -1,0 +1,125 @@
+groups:
+  - name: swastha_ai_kafka_alerts
+    interval: 30s
+    rules:
+
+      # ── Consumer Lag ────────────────────────────────────────────────────────
+      - alert: ConsumerLagHigh
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          layer: layer2
+        annotations:
+          summary: "Consumer lag high: {{ $labels.group }} on {{ $labels.topic }}[{{ $labels.partition }}]"
+          description: >
+            Consumer group {{ $labels.group }} is {{ $value }} messages behind on
+            topic {{ $labels.topic }} partition {{ $labels.partition }}.
+            This may indicate slow processing or a stalled consumer.
+          runbook_url: "https://wiki.swastha.ai/runbooks/consumer-lag"
+
+      - alert: ConsumerLagCritical
+        expr: kafka_consumer_lag > 10000
+        for: 2m
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "CRITICAL consumer lag: {{ $labels.group }} on {{ $labels.topic }}"
+          description: >
+            Consumer group {{ $labels.group }} has {{ $value }} messages backlog on
+            {{ $labels.topic }}[{{ $labels.partition }}]. CDSCO SLA at risk.
+            Immediate investigation required.
+
+      # ── Consumer Group Health ───────────────────────────────────────────────
+      - alert: ConsumerGroupDead
+        expr: time() - kafka_consumer_last_heartbeat_seconds > 300
+        for: 1m
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "Consumer group dead: {{ $labels.group }}"
+          description: >
+            No heartbeat received from consumer group {{ $labels.group }}
+            for more than 5 minutes. Consumer may have crashed.
+
+      # ── DLQ Depth ──────────────────────────────────────────────────────────
+      - alert: DLQDepthHigh
+        expr: kafka_dlq_depth > 10
+        for: 0m
+        labels:
+          severity: warning
+          layer: layer2
+        annotations:
+          summary: "DLQ depth high: {{ $labels.topic }}"
+          description: >
+            DLQ topic {{ $labels.topic }} has {{ $value }} pending events.
+            Review and reprocess via /dlq/events or /dlq/events/bulk-reprocess.
+
+      - alert: DLQDepthCritical
+        expr: kafka_dlq_depth > 50
+        for: 0m
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "CRITICAL DLQ depth: {{ $labels.topic }}"
+          description: >
+            DLQ topic {{ $labels.topic }} has {{ $value }} pending events — CRITICAL.
+            Document processing pipeline is generating systematic failures.
+
+      # ── Circuit Breakers ───────────────────────────────────────────────────
+      - alert: CircuitBreakerOpen
+        expr: kafka_circuit_breaker_state == 2  # 2 = OPEN (0=CLOSED,1=HALF,2=OPEN)
+        for: 5m
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "Circuit breaker OPEN: {{ $labels.circuit }}"
+          description: >
+            Circuit breaker {{ $labels.circuit }} has been OPEN for > 5 minutes.
+            Downstream service {{ $labels.circuit }} is unavailable.
+
+      # ── Broker Health ──────────────────────────────────────────────────────
+      - alert: BrokerDown
+        expr: up{job="kafka"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "Kafka broker down: {{ $labels.instance }}"
+          description: >
+            Kafka broker {{ $labels.instance }} is unreachable.
+            In a 3-node cluster this does not immediately halt processing,
+            but replication is degraded. Investigate immediately.
+
+      # ── Schema Registry ────────────────────────────────────────────────────
+      - alert: SchemaRegistryDown
+        expr: up{job="schema-registry"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          layer: layer2
+        annotations:
+          summary: "Confluent Schema Registry is down"
+          description: >
+            Schema Registry is unreachable. All producers and consumers will
+            fail Avro serialization. No messages will flow through the platform.
+
+      # ── Message Processing ─────────────────────────────────────────────────
+      - alert: HighMessageFailureRate
+        expr: |
+          rate(kafka_messages_failed_total[5m]) /
+          (rate(kafka_messages_processed_total[5m]) + rate(kafka_messages_failed_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          layer: layer2
+        annotations:
+          summary: "High failure rate: {{ $labels.group }} on {{ $labels.topic }}"
+          description: >
+            More than 10% of messages are failing in consumer group {{ $labels.group }}
+            on topic {{ $labels.topic }}. Check DLQ and application logs.
