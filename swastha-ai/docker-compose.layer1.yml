@@ -1,0 +1,130 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# RxFlow Layer 1 — Document Pre-processing Engine
+#
+# USAGE:
+#   Start Layer 0 first:
+#     docker compose -f docker-compose.yml up -d
+#
+#   Then start Layer 1:
+#     docker compose -f docker-compose.yml -f docker-compose.layer1.yml up -d
+#
+# This file only adds services. All Layer 0 services (postgres, kafka, minio,
+# redis, keycloak) are inherited from docker-compose.yml.
+# ──────────────────────────────────────────────────────────────────────────────
+
+networks:
+  swastha-ai-network:
+    external: true
+
+volumes:
+  chromadb_data:
+  models_cache:
+
+services:
+  # ─────────────────────────────────────────────
+  # ChromaDB — Vector Store
+  # ─────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: swastha-ai-chromadb
+    restart: unless-stopped
+    environment:
+      CHROMA_SERVER_HOST: "0.0.0.0"
+      CHROMA_SERVER_HTTP_PORT: "8002"
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    ports:
+      - "8002:8002"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    networks:
+      - swastha-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/heartbeat"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # Apache Tika — Universal Format Fallback
+  # ─────────────────────────────────────────────
+  tika:
+    image: apache/tika:latest-full
+    container_name: swastha-ai-tika
+    restart: unless-stopped
+    ports:
+      - "9998:9998"
+    networks:
+      - swastha-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9998/tika"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # RxFlow Preprocessor — Layer 1 Engine
+  # ─────────────────────────────────────────────
+  preprocessor:
+    build:
+      context: .
+      dockerfile: app/preprocessing/Dockerfile
+    container_name: swastha-ai-preprocessor
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override service hostnames for Docker networking
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-swastha-ai}:${POSTGRES_PASSWORD:-swastha_ai_secret}@postgres:5432/${POSTGRES_DB:-swastha_ai_db}
+      MINIO_ENDPOINT: minio:9000
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-swastha_ai_redis_secret}@redis:6379/0
+      KEYCLOAK_URL: http://keycloak:8080
+      # Layer 1 specific
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8002"
+      TIKA_SERVER_URL: http://tika:9998
+      PREPROCESSOR_HEALTH_PORT: "8001"
+      # HuggingFace model cache — points at the mounted volume
+      TRANSFORMERS_CACHE: /models
+      HF_HOME: /models
+      SENTENCE_TRANSFORMERS_HOME: /models
+      MINIO_BUCKET_PROCESSED: processed-documents
+      PIPELINE_VERSION: "1.0.0"
+      # OCR concurrency limit (CPU-bound — 4 is the sweet spot)
+      OCR_CONCURRENCY: "4"
+      # Embedding batch size
+      EMBEDDING_BATCH_SIZE: "32"
+      # Quality threshold for human review flag
+      EXTRACTION_CONFIDENCE_THRESHOLD: "0.7"
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      tika:
+        condition: service_started
+    networks:
+      - swastha-ai-network
+    volumes:
+      # Persist model weights so container restarts don't re-download 3GB+
+      - models_cache:/models
+      - /var/log/swastha-ai:/var/log/swastha-ai
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

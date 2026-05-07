@@ -1,0 +1,25 @@
+{
+  "type": "record",
+  "name": "NotificationEvent",
+  "namespace": "ai.swasta.events",
+  "doc": "Published to notifications.events by any layer that needs to alert operators. Consumed by the notification service to send email/SMS/webhook alerts.",
+  "fields": [
+    {"name": "event_id",        "type": "string"},
+    {"name": "event_version",   "type": "string", "default": "1.0"},
+    {"name": "source_layer",    "type": "string",  "doc": "layer0 | layer1 | layer2 | layer3"},
+    {"name": "severity",        "type": {"type": "enum", "name": "Severity",
+      "symbols": ["INFO", "WARNING", "CRITICAL"]}},
+    {"name": "alert_type",      "type": "string",
+      "doc": "consumer_lag_high | dlq_depth_high | circuit_open | sae_critical | report_ready | processing_failed"},
+    {"name": "title",           "type": "string"},
+    {"name": "message",         "type": "string"},
+    {"name": "doc_id",          "type": ["null", "string"], "default": null},
+    {"name": "affected_topic",  "type": ["null", "string"], "default": null},
+    {"name": "affected_group",  "type": ["null", "string"], "default": null},
+    {"name": "metric_value",    "type": ["null", "double"], "default": null,
+      "doc": "The numeric value that triggered the alert (e.g. lag count)"},
+    {"name": "metric_threshold","type": ["null", "double"], "default": null},
+    {"name": "extra",           "type": {"type": "map", "values": "string"}, "default": {}},
+    {"name": "timestamp",       "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

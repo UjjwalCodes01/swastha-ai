@@ -45,6 +45,7 @@ from app.dependencies import close_redis, init_redis
 from app.ingestion.router import router as ingestion_router
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.preprocessing.consumer import PreprocessorConsumer
 from app.queue.kafka_producer import close_kafka, init_kafka
 from app.storage.minio_client import close_minio, init_minio
 
@@ -168,7 +169,13 @@ async def lifespan(app: FastAPI):
     _adapter_tasks.append(asyncio.create_task(md_online.run(), name="md-online-adapter"))
     logger.info("Portal adapters started")
 
-    logger.info("SwasthaAI Layer 0 startup complete — ready to serve requests")
+    # 7. Layer 1 Preprocessor Consumer
+    if settings.model_config.get("ENABLE_PREPROCESSOR", "true").lower() == "true":
+        preprocessor = PreprocessorConsumer()
+        _adapter_tasks.append(asyncio.create_task(preprocessor.start(), name="preprocessor-consumer"))
+        logger.info("Layer 1 Preprocessor Consumer started")
+
+    logger.info("SwasthaAI Layer 0 & 1 startup complete — ready to serve requests")
 
     yield  # Application is now running
 

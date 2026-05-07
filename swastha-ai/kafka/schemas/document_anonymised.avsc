@@ -1,0 +1,20 @@
+{
+  "type": "record",
+  "name": "DocumentAnonymised",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 3 (AI Core) after PII/patient data has been de-identified per DPDP Act 2023 requirements.",
+  "fields": [
+    {"name": "event_id",                "type": "string"},
+    {"name": "event_version",           "type": "string",  "default": "1.0"},
+    {"name": "doc_id",                  "type": "string"},
+    {"name": "submission_type",         "type": {"type": "enum", "name": "SubmissionType4",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "anonymised_storage_path", "type": "string",  "doc": "MinIO path to de-identified document"},
+    {"name": "pii_entities_removed",    "type": "int",     "doc": "Count of PII spans removed"},
+    {"name": "anonymisation_method",    "type": "string",  "default": "presidio",
+      "doc": "Tool used: presidio | custom | hybrid"},
+    {"name": "confidence",              "type": "float"},
+    {"name": "model_version",           "type": "string"},
+    {"name": "timestamp",               "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

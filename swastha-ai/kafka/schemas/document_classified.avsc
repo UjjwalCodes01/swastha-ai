@@ -1,0 +1,32 @@
+{
+  "type": "record",
+  "name": "DocumentClassified",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 3 after a document has been classified for regulatory category and risk/priority. High-severity SAE documents trigger immediate alerts via notifications.events.",
+  "fields": [
+    {"name": "event_id",         "type": "string"},
+    {"name": "event_version",    "type": "string", "default": "1.0"},
+    {"name": "doc_id",           "type": "string"},
+    {"name": "submission_type",  "type": {"type": "enum", "name": "SubmissionType6",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "classification",   "type": {
+      "type": "record",
+      "name": "ClassificationResult",
+      "fields": [
+        {"name": "category",         "type": "string",  "doc": "Primary regulatory category"},
+        {"name": "subcategory",      "type": ["null", "string"], "default": null},
+        {"name": "priority",         "type": {"type": "enum", "name": "Priority",
+          "symbols": ["critical", "high", "medium", "low", "informational"]}},
+        {"name": "risk_score",       "type": "float",  "doc": "0.0 – 1.0"},
+        {"name": "sae_severity",     "type": ["null", "string"], "default": null,
+          "doc": "WHO-UMC severity for SAE reports: death | life_threatening | hospitalisation | disability | other"},
+        {"name": "requires_review",  "type": "boolean", "default": false},
+        {"name": "labels",           "type": {"type": "array", "items": "string"}, "default": []},
+        {"name": "confidence",       "type": "float"}
+      ]
+    }},
+    {"name": "model_id",         "type": "string"},
+    {"name": "model_version",    "type": "string"},
+    {"name": "timestamp",        "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

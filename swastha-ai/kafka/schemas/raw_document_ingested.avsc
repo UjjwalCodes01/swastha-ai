@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "RawDocumentIngested",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 0 (ingestion) when a raw document has been stored in MinIO and is ready for pre-processing.",
+  "fields": [
+    {"name": "event_id",        "type": "string",  "doc": "UUID v4 — unique per event"},
+    {"name": "event_version",   "type": "string",  "default": "1.0"},
+    {"name": "doc_id",          "type": "string",  "doc": "DOC-XXXXXXXXXXXX"},
+    {"name": "raw_storage_path","type": "string",  "doc": "MinIO path: raw/{type}/{YYYY}/{MM}/{DD}/{doc_id}/{filename}"},
+    {"name": "submission_type", "type": {
+      "type": "enum",
+      "name": "SubmissionType",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]
+    }},
+    {"name": "portal_source", "type": {
+      "type": "enum",
+      "name": "PortalSource",
+      "symbols": ["sugam", "md_online", "manual", "sae_feed"]
+    }},
+    {"name": "original_filename",  "type": "string"},
+    {"name": "mime_type",          "type": "string"},
+    {"name": "file_size_bytes",    "type": "long"},
+    {"name": "checksum_sha256",    "type": "string"},
+    {"name": "submitted_by",       "type": "string",  "doc": "User ID or system identifier"},
+    {"name": "ip_address",         "type": ["null", "string"],  "default": null},
+    {"name": "external_id",        "type": ["null", "string"],  "default": null,  "doc": "SUGAM / MDOnline reference number"},
+    {"name": "metadata",           "type": {"type": "map", "values": "string"}, "default": {},  "doc": "Arbitrary key-value metadata from the portal"},
+    {"name": "timestamp",          "type": "long",  "logicalType": "timestamp-millis",  "doc": "Epoch millis UTC"}
+  ]
+}

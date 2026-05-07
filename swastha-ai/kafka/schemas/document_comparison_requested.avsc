@@ -1,0 +1,24 @@
+{
+  "type": "record",
+  "name": "DocumentComparisonRequested",
+  "namespace": "ai.swasta.events",
+  "doc": "Published when a regulatory officer or automated rule requests a side-by-side comparison of two documents (e.g. two versions of a drug application).",
+  "fields": [
+    {"name": "event_id",           "type": "string"},
+    {"name": "event_version",      "type": "string", "default": "1.0"},
+    {"name": "comparison_id",      "type": "string",  "doc": "UUID for this comparison request"},
+    {"name": "doc_id_a",           "type": "string",  "doc": "Primary document"},
+    {"name": "doc_id_b",           "type": "string",  "doc": "Document to compare against"},
+    {"name": "requested_by",       "type": "string"},
+    {"name": "comparison_type",    "type": {"type": "enum", "name": "ComparisonType",
+      "symbols": ["version_diff", "competitor_drug", "clinical_vs_approved", "sae_correlation"]}},
+    {"name": "comparison_aspects", "type": {"type": "array", "items": "string"}, "default": [],
+      "doc": "Aspects to compare: efficacy, safety, dosage, indication, etc."},
+    {"name": "priority",           "type": {"type": "enum", "name": "CompPriority",
+      "symbols": ["high", "medium", "low"]}, "default": "medium"},
+    {"name": "deadline_at",        "type": ["null", "long"], "default": null,
+      "logicalType": "timestamp-millis",
+      "doc": "Optional deadline — comparisons past this are auto-escalated"},
+    {"name": "timestamp",          "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

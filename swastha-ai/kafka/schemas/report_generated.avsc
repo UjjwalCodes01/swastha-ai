@@ -1,0 +1,25 @@
+{
+  "type": "record",
+  "name": "ReportGenerated",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 3 when a final regulatory report has been generated and stored. Consumed by Layer 4 (compliance) and Layer 6 (output/delivery).",
+  "fields": [
+    {"name": "event_id",          "type": "string"},
+    {"name": "event_version",     "type": "string", "default": "1.0"},
+    {"name": "report_id",         "type": "string",  "doc": "RPT-XXXXXXXXXXXX"},
+    {"name": "doc_id",            "type": "string"},
+    {"name": "submission_type",   "type": {"type": "enum", "name": "SubmissionType7",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "report_type",       "type": {"type": "enum", "name": "ReportType",
+      "symbols": ["summary", "detailed", "comparison", "compliance_check", "sae_signal"]}},
+    {"name": "report_storage_path","type": "string",  "doc": "MinIO path"},
+    {"name": "report_format",     "type": {"type": "enum", "name": "ReportFormat",
+      "symbols": ["pdf", "json", "html", "docx"]}},
+    {"name": "page_count",        "type": "int"},
+    {"name": "generated_for",     "type": "string",  "doc": "User or system that requested the report"},
+    {"name": "model_ids_used",    "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "generation_duration_ms", "type": "long"},
+    {"name": "report_metadata",   "type": {"type": "map", "values": "string"}, "default": {}},
+    {"name": "timestamp",         "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

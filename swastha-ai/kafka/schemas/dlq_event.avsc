@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "DLQEvent",
+  "namespace": "ai.swasta.events",
+  "doc": "Wraps any failed message that has exhausted retries. Stored in PostgreSQL and visible in the DLQ admin API. Never silently discarded.",
+  "fields": [
+    {"name": "event_id",          "type": "string"},
+    {"name": "event_version",     "type": "string", "default": "1.0"},
+    {"name": "original_topic",    "type": "string"},
+    {"name": "original_partition","type": "int"},
+    {"name": "original_offset",   "type": "long"},
+    {"name": "original_payload",  "type": "string",  "doc": "JSON-serialised original message"},
+    {"name": "original_key",      "type": ["null", "string"], "default": null},
+    {"name": "error_type",        "type": "string",  "doc": "Exception class name"},
+    {"name": "error_message",     "type": "string"},
+    {"name": "stack_trace",       "type": ["null", "string"], "default": null},
+    {"name": "retry_count",       "type": "int",  "default": 0},
+    {"name": "consumer_group",    "type": "string"},
+    {"name": "failed_at",         "type": "long",  "logicalType": "timestamp-millis"},
+    {"name": "doc_id",            "type": ["null", "string"], "default": null},
+    {"name": "timestamp",         "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

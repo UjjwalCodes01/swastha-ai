@@ -1,0 +1,47 @@
+{
+  "type": "record",
+  "name": "DocumentPreprocessed",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 1 (pre-processing) when a document has been fully extracted, chunked, embedded and stored in ChromaDB.",
+  "fields": [
+    {"name": "event_id",              "type": "string"},
+    {"name": "event_version",         "type": "string",  "default": "1.0"},
+    {"name": "doc_id",                "type": "string"},
+    {"name": "processed_storage_path","type": "string",  "doc": "MinIO path to the processed JSON artefact"},
+    {"name": "submission_type",       "type": {"type": "enum", "name": "SubmissionType2",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "portal_source",         "type": {"type": "enum", "name": "PortalSource2",
+      "symbols": ["sugam", "md_online", "manual", "sae_feed"]}},
+    {"name": "submitted_by",          "type": ["null", "string"],  "default": null},
+    {"name": "original_filename",     "type": "string"},
+    {"name": "chunk_count",           "type": "int"},
+    {"name": "table_count",           "type": "int"},
+    {"name": "page_count",            "type": "int"},
+    {"name": "word_count",            "type": "int"},
+    {"name": "extraction_confidence", "type": "float",  "doc": "0.0 – 1.0"},
+    {"name": "language",              "type": "string",  "default": "en"},
+    {"name": "language_confidence",   "type": "float",   "default": 1.0},
+    {"name": "is_multilingual",       "type": "boolean", "default": false},
+    {"name": "ocr_used",              "type": "boolean", "default": false},
+    {"name": "ocr_pages",             "type": "int",     "default": 0},
+    {"name": "extractors_used",       "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "flags", "type": {
+      "type": "record",
+      "name": "PreprocessingFlags",
+      "fields": [
+        {"name": "needs_human_review",   "type": "boolean", "default": false},
+        {"name": "has_tables",           "type": "boolean", "default": false},
+        {"name": "is_multilingual",      "type": "boolean", "default": false},
+        {"name": "ocr_used",             "type": "boolean", "default": false},
+        {"name": "low_confidence",       "type": "boolean", "default": false},
+        {"name": "possible_encrypted",   "type": "boolean", "default": false},
+        {"name": "possible_corrupted",   "type": "boolean", "default": false},
+        {"name": "translation_needed",   "type": "boolean", "default": false},
+        {"name": "pii_columns_detected", "type": "boolean", "default": false}
+      ]
+    }, "default": {}},
+    {"name": "metadata",        "type": {"type": "map", "values": "string"}, "default": {}},
+    {"name": "preprocessed_at", "type": "long",  "logicalType": "timestamp-millis"},
+    {"name": "timestamp",       "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

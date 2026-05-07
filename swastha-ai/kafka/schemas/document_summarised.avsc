@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "DocumentSummarised",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 3 after an AI-generated regulatory summary has been produced for a document.",
+  "fields": [
+    {"name": "event_id",            "type": "string"},
+    {"name": "event_version",       "type": "string", "default": "1.0"},
+    {"name": "doc_id",              "type": "string"},
+    {"name": "submission_type",     "type": {"type": "enum", "name": "SubmissionType5",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "summary_storage_path","type": "string",  "doc": "MinIO path to the summary JSON"},
+    {"name": "summary_word_count",  "type": "int"},
+    {"name": "key_findings",        "type": {"type": "array", "items": "string"}, "default": [],
+      "doc": "Top 5 key regulatory findings extracted"},
+    {"name": "model_id",            "type": "string"},
+    {"name": "model_version",       "type": "string"},
+    {"name": "prompt_tokens",       "type": "int",  "default": 0},
+    {"name": "completion_tokens",   "type": "int",  "default": 0},
+    {"name": "confidence",          "type": "float"},
+    {"name": "timestamp",           "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}

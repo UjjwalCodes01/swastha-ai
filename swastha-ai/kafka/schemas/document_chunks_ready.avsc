@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "DocumentChunksReady",
+  "namespace": "ai.swasta.events",
+  "doc": "Published by Layer 1 signalling that all chunks for a document are indexed in ChromaDB and ready for RAG querying by Layer 3.",
+  "fields": [
+    {"name": "event_id",          "type": "string"},
+    {"name": "event_version",     "type": "string", "default": "1.0"},
+    {"name": "doc_id",            "type": "string"},
+    {"name": "submission_type",   "type": {"type": "enum", "name": "SubmissionType3",
+      "symbols": ["drug", "medical_device", "clinical_trial", "sae"]}},
+    {"name": "chroma_collection", "type": "string",  "doc": "Collection name in ChromaDB"},
+    {"name": "chunk_ids",         "type": {"type": "array", "items": "string"}, "default": []},
+    {"name": "chunk_count",       "type": "int"},
+    {"name": "preprocessed_at",   "type": "long",  "logicalType": "timestamp-millis"},
+    {"name": "timestamp",         "type": "long",  "logicalType": "timestamp-millis"}
+  ]
+}
