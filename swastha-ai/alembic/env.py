@@ -26,8 +26,11 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url from the environment variable
-database_url = os.environ.get("DATABASE_URL")
+# Supabase: always use the DIRECT CONNECTION for Alembic migrations.
+# The transaction pooler (port 6543) does not support DDL statements reliably.
+# Set ALEMBIC_DATABASE_URL in .env to db.[ref].supabase.co:5432
+# Falls back to DATABASE_URL for local PostgreSQL setups.
+database_url = os.environ.get("ALEMBIC_DATABASE_URL") or os.environ.get("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 

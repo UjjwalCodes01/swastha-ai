@@ -16,7 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Central settings object for the SwasthaAI Layer 0 ingestion service.
+    Central settings object for the SwasthaAI platform (Layers 0–2).
 
     Loaded entirely from environment variables (or a .env file in development).
     Validate on startup — bad config fails fast rather than at runtime.
@@ -34,11 +34,33 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     secret_key: str = Field(..., min_length=32)
 
-    # ── PostgreSQL ──────────────────────────────────────────────────────────────
+    # ── Supabase / PostgreSQL ───────────────────────────────────────
+    # Runtime DB URL: use the Supabase TRANSACTION POOLER (port 6543)
+    # for async connections. asyncpg does not support prepared statements
+    # via the pooler, so statement_cache_size=0 is set in _build_engine.
     database_url: str = Field(
         ...,
         description="asyncpg-compatible DSN: postgresql+asyncpg://user:pass@host/db",
     )
+
+    # Migration URL: Alembic MUST use the DIRECT CONNECTION (port 5432).
+    # Falls back to database_url for local dev without a separate alembic URL.
+    alembic_database_url: str | None = Field(
+        default=None,
+        description="Direct connection URL for Alembic migrations (Supabase port 5432)",
+    )
+
+    # Supabase project reference (e.g. abcdefghijklmnop)
+    supabase_project_ref: str = ""
+
+    # Supabase service role key — server-side only, never exposed to clients
+    supabase_service_role_key: str = ""
+
+    # Supabase anon/public key
+    supabase_anon_key: str = ""
+
+    # Supabase project base URL (https://[ref].supabase.co)
+    supabase_url: str = ""
 
     # ── MinIO ───────────────────────────────────────────────────────────────────
     minio_endpoint: str = Field(..., description="host:port, no scheme")

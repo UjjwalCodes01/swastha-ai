@@ -28,13 +28,21 @@ _async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def _build_engine(database_url: str, pool_size: int = 10) -> AsyncEngine:
-    """Create an async SQLAlchemy engine with asyncpg."""
+    """
+    Create an async SQLAlchemy engine with asyncpg.
+
+    Supabase uses PgBouncer in transaction-pooling mode (port 6543).
+    PgBouncer does NOT support prepared statements, so statement_cache_size=0
+    prevents asyncpg from caching them. Safe for direct connections too.
+    """
     settings = get_settings()
 
     connect_args: dict = {
         "command_timeout": 30,
+        # Required for Supabase transaction pooler (PgBouncer).
+        "statement_cache_size": 0,
         "server_settings": {
-            "application_name": "swastha-ai-ingestion",
+            "application_name": "swastha-ai",
         },
     }
 
