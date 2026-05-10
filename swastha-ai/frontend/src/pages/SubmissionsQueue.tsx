@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, MoreVertical, FileText, CheckCircle2, Clock, AlertCircle, Loader2, AlertTriangle, Upload, X, Check } from 'lucide-react';
+import { Search, FileText, CheckCircle2, Clock, AlertCircle, Loader2, AlertTriangle, Upload, X, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSubmissions, ingestSubmission, type SubmissionSummary } from '../lib/api';
+import { fetchSubmissions, ingestSubmission } from '../lib/api';
 
 const statusOptions = [
   { label: 'All Statuses', value: '' },
