@@ -117,6 +117,22 @@ class Settings(BaseSettings):
     adapter_poll_interval_seconds: int = Field(default=60, ge=10)
 
     # ── Derived Properties ───────────────────────────────────────────────────────
+    # Layer 1 background worker
+    enable_preprocessor: bool = True
+    embedding_batch_size: int = Field(default=32, ge=1)
+    ocr_concurrency: int = Field(default=4, ge=1)
+    chroma_host: str = "localhost"
+    chroma_port: int = Field(default=8002, ge=1)
+
+    # Layer 3 AI Core
+    enable_ai_core: bool = True
+    ai_core_model_mode: Literal["offline", "hybrid", "cloud"] = "offline"
+    anthropic_api_key: str = ""
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1:8b"
+    ai_core_processed_bucket: str = "swastha-ai-processed-documents"
+    enable_compliance: bool = True
+
     @property
     def max_upload_size_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024

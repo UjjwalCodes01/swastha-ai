@@ -27,6 +27,16 @@ SUBMISSION_STATUS_UPDATED = "submissions.status.updated"
 # Dead-letter topic: messages that could not be processed after retries.
 INGESTION_DEAD_LETTER = "ingestion.dead_letter"
 
+# Layer 1 / 2 / 3 pipeline topics.
+DOCUMENTS_PREPROCESSED = "documents.preprocessed"
+DOCUMENTS_CHUNKS_READY = "documents.chunks.ready"
+DOCUMENTS_ANONYMISED = "documents.anonymised"
+DOCUMENTS_SUMMARISED = "documents.summarised"
+DOCUMENTS_CLASSIFIED = "documents.classified"
+DOCUMENTS_COMPARISON_REQUESTED = "documents.comparison.requested"
+REPORTS_GENERATED = "reports.generated"
+NOTIFICATIONS_EVENTS = "notifications.events"
+
 # ── All Topics ────────────────────────────────────────────────────────────────
 # Used during startup to ensure topics are created if auto-creation is disabled.
 
@@ -36,4 +46,12 @@ ALL_TOPICS: list[str] = [
     RAW_DOCUMENTS_BATCH_COMPLETE,
     SUBMISSION_STATUS_UPDATED,
     INGESTION_DEAD_LETTER,
+    DOCUMENTS_PREPROCESSED,
+    DOCUMENTS_CHUNKS_READY,
+    DOCUMENTS_ANONYMISED,
+    DOCUMENTS_SUMMARISED,
+    DOCUMENTS_CLASSIFIED,
+    DOCUMENTS_COMPARISON_REQUESTED,
+    REPORTS_GENERATED,
+    NOTIFICATIONS_EVENTS,
 ]

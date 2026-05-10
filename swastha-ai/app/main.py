@@ -38,11 +38,14 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.md_online_adapter import MDOnlineAdapter
 from app.adapters.sugam_adapter import SUGAMAdapter
+from app.ai_core.consumer import AICoreConsumer
 from app.audit.logger import close_audit_logger, init_audit_logger
+from app.compliance.consumer import ComplianceConsumer
 from app.config import get_settings
 from app.db.connection import close_db, get_session_factory, init_db
 from app.dependencies import close_redis, init_redis
 from app.ingestion.router import router as ingestion_router
+from app.output.router import router as output_router
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.preprocessing.consumer import PreprocessorConsumer
@@ -170,12 +173,24 @@ async def lifespan(app: FastAPI):
     logger.info("Portal adapters started")
 
     # 7. Layer 1 Preprocessor Consumer
-    if settings.model_config.get("ENABLE_PREPROCESSOR", "true").lower() == "true":
+    if settings.enable_preprocessor:
         preprocessor = PreprocessorConsumer()
         _adapter_tasks.append(asyncio.create_task(preprocessor.start(), name="preprocessor-consumer"))
         logger.info("Layer 1 Preprocessor Consumer started")
 
-    logger.info("SwasthaAI Layer 0 & 1 startup complete — ready to serve requests")
+    # 8. Layer 3 AI Core Consumer
+    if settings.enable_ai_core:
+        ai_core = AICoreConsumer()
+        _adapter_tasks.append(asyncio.create_task(ai_core.start(), name="ai-core-consumer"))
+        logger.info("Layer 3 AI Core Consumer started")
+
+    # 9. Layer 4 Compliance & Governance Consumer
+    if settings.enable_compliance:
+        compliance = ComplianceConsumer()
+        _adapter_tasks.append(asyncio.create_task(compliance.start(), name="compliance-consumer"))
+        logger.info("Layer 4 Compliance Consumer started")
+
+    logger.info("SwasthaAI Layers 0-4 startup complete — ready to serve requests")
 
     yield  # Application is now running
 
@@ -276,6 +291,7 @@ else:
 # ── Routers ────────────────────────────────────────────────────────────────────
 
 app.include_router(ingestion_router)
+app.include_router(output_router, prefix="/api/v1")
 
 
 # ── Global Exception Handlers ─────────────────────────────────────────────────

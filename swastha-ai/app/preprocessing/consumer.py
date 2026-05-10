@@ -76,11 +76,11 @@ class PreprocessorConsumer:
         minio_client = await get_minio_client()
         session_factory = get_session_factory()
         
-        embedding_service = EmbeddingService(batch_size=int(self.settings.model_config.get("EMBEDDING_BATCH_SIZE", 32)))
+        embedding_service = EmbeddingService(batch_size=self.settings.embedding_batch_size)
         await embedding_service.initialize(self._redis)
         
-        chroma_host = self.settings.model_config.get("CHROMA_HOST", "localhost")
-        chroma_port = int(self.settings.model_config.get("CHROMA_PORT", 8002))
+        chroma_host = self.settings.chroma_host
+        chroma_port = self.settings.chroma_port
         chroma_store = ChromaStore(host=chroma_host, port=chroma_port)
         await chroma_store.initialize()
 
@@ -89,7 +89,7 @@ class PreprocessorConsumer:
             db_session_factory=session_factory,
             embedding_service=embedding_service,
             chroma_store=chroma_store,
-            ocr_concurrency=int(self.settings.model_config.get("OCR_CONCURRENCY", 4)),
+            ocr_concurrency=self.settings.ocr_concurrency,
         )
 
         self.consumer = AIOKafkaConsumer(
