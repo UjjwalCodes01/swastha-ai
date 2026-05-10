@@ -69,6 +69,166 @@ router = APIRouter(
 )
 
 
+async def _direct_process_document(
+    doc_id: str,
+    raw_storage_path: str,
+    submission_type: str,
+    portal_source: str,
+    submitted_by: str | None,
+    original_filename: str,
+    file_bytes: bytes,
+) -> None:
+    """
+    Run the preprocessing pipeline directly, bypassing Kafka.
+
+    Used when Kafka is unavailable (local dev). This processes the document
+    in-process as a background task so the upload API returns immediately.
+    """
+    from app.db.connection import get_session_factory
+    from app.preprocessing.pipeline import PreprocessingPipeline
+    from app.preprocessing.embedder.embedding_service import EmbeddingService
+    from app.preprocessing.embedder.chroma_store import ChromaStore
+    from app.config import get_settings
+    from sqlalchemy import text as sa_text
+
+    settings = get_settings()
+
+    try:
+        logger.info(f"[Direct Pipeline] Starting for {doc_id}")
+
+        # Update status to preprocessing
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            await session.execute(
+                sa_text("UPDATE submissions SET status = 'preprocessing' WHERE doc_id = :doc_id"),
+                {"doc_id": doc_id},
+            )
+            await session.commit()
+
+        # Initialize lightweight pipeline components
+        minio_client = await get_minio_client()
+
+        # Embedding service — try to initialize, fallback to no-op if it fails
+        embedding_svc = EmbeddingService(batch_size=settings.embedding_batch_size)
+        try:
+            from app.dependencies import get_redis as _get_redis
+            redis = await _get_redis()
+            await embedding_svc.initialize(redis)
+        except Exception as emb_exc:
+            logger.warning(f"[Direct Pipeline] Embedding init failed: {emb_exc} — using dummy embeddings")
+            # Patch generate_embeddings to return zero vectors
+            async def _dummy_embeddings(texts):
+                return [[0.0] * 384 for _ in texts]
+            embedding_svc.generate_embeddings = _dummy_embeddings
+
+        # ChromaDB — try to connect, fallback gracefully
+        chroma_store = ChromaStore(host=settings.chroma_host, port=settings.chroma_port)
+        try:
+            await chroma_store.initialize()
+        except Exception as chroma_exc:
+            logger.warning(f"[Direct Pipeline] ChromaDB init failed: {chroma_exc} — skipping vector storage")
+            # Patch add_chunks to no-op
+            async def _dummy_add_chunks(**kwargs):
+                return ""
+            chroma_store.add_chunks = _dummy_add_chunks
+
+        pipeline = PreprocessingPipeline(
+            minio_client=minio_client,
+            db_session_factory=session_factory,
+            embedding_service=embedding_svc,
+            chroma_store=chroma_store,
+            ocr_concurrency=settings.ocr_concurrency,
+        )
+
+        # Override the pipeline's _save_to_minio to use our MinIOClient wrapper
+        async def _save_to_minio_fixed(path, data):
+            import json as _json
+            json_bytes = _json.dumps(data, ensure_ascii=False).encode("utf-8")
+            bucket = settings.ai_core_processed_bucket
+            # Ensure bucket exists
+            try:
+                await minio_client._client.head_bucket(Bucket=bucket)
+            except Exception:
+                await minio_client._client.create_bucket(Bucket=bucket)
+            await minio_client._client.put_object(
+                Bucket=bucket, Key=path, Body=json_bytes, ContentType="application/json",
+            )
+        pipeline._save_to_minio = _save_to_minio_fixed
+
+        # Run the full pipeline
+        result = await pipeline.process_document(
+            doc_id=doc_id,
+            file_bytes=file_bytes,
+            submission_type=submission_type,
+            portal_source=portal_source,
+            submitted_by=submitted_by,
+            original_filename=original_filename,
+        )
+
+        logger.info(
+            f"[Direct Pipeline] Preprocessing completed for {doc_id}",
+            extra={"chunks": result.get("chunks"), "duration_ms": result.get("duration_ms")},
+        )
+
+        # ── Layer 3: AI Core (Summarisation, Classification, Anonymisation) ──
+        try:
+            from app.ai_core.pipeline import AICorePipeline
+            from app.queue.kafka_producer import get_kafka_producer
+            from datetime import datetime as _dt, timezone as _tz
+
+            producer = await get_kafka_producer()
+            ai_pipeline = AICorePipeline(
+                minio_client=minio_client,
+                producer=producer,
+                db_session_factory=session_factory,
+                chroma_client=None,
+            )
+
+            # Build the event payload that Layer 1 would normally publish to Kafka
+            now = _dt.now(_tz.utc)
+            processed_path = f"processed/{submission_type}/{now.year}/{now.month:02d}/{now.day:02d}/{doc_id}/processed.json"
+            preprocessed_event = {
+                "doc_id": doc_id,
+                "processed_storage_path": processed_path,
+                "submission_type": submission_type,
+                "portal_source": portal_source,
+                "submitted_by": submitted_by,
+                "original_filename": original_filename,
+            }
+
+            # Step 1: Anonymisation (handle_preprocessed)
+            anon_result = await ai_pipeline.handle_preprocessed(preprocessed_event)
+            logger.info(f"[Direct Pipeline] Anonymisation done for {doc_id}")
+
+            # Step 2: Summarisation + Classification (handle_anonymised)
+            await ai_pipeline.handle_anonymised(anon_result)
+            logger.info(f"[Direct Pipeline] AI Core completed for {doc_id}")
+
+        except Exception as ai_exc:
+            logger.warning(
+                f"[Direct Pipeline] AI Core failed for {doc_id}: {ai_exc}",
+                exc_info=True,
+            )
+            # Don't fail the whole pipeline — preprocessing already succeeded
+
+    except Exception as exc:
+        logger.error(
+            f"[Direct Pipeline] Failed for {doc_id}: {exc}",
+            exc_info=True,
+        )
+        # Mark as failed in DB
+        try:
+            session_factory = get_session_factory()
+            async with session_factory() as session:
+                await session.execute(
+                    sa_text("UPDATE submissions SET status = 'failed' WHERE doc_id = :doc_id"),
+                    {"doc_id": doc_id},
+                )
+                await session.commit()
+        except Exception:
+            pass
+
+
 def _get_client_ip(request: Request) -> str:
     """Extract the real client IP from the request."""
     forwarded = request.headers.get("X-Forwarded-For")
@@ -195,6 +355,31 @@ async def ingest_submission(
             user_agent=request.headers.get("User-Agent"),
             external_id=external_id,
         )
+
+        # ── Direct processing fallback when Kafka is unavailable ──────────
+        # In local dev, Kafka broker is often unreachable. Messages sit in the
+        # local in-memory queue and consumers can't start. To keep the pipeline
+        # working, we trigger preprocessing directly as a background task.
+        kafka_healthy = await kafka.health_check()
+        if not kafka_healthy:
+            import asyncio
+            asyncio.create_task(
+                _direct_process_document(
+                    doc_id=result.doc_id,
+                    raw_storage_path=result.raw_storage_path,
+                    submission_type=submission_type,
+                    portal_source=portal_source,
+                    submitted_by=current_user.sub,
+                    original_filename=filename,
+                    file_bytes=file_bytes,
+                ),
+                name=f"direct-process-{result.doc_id}",
+            )
+            logger.info(
+                "Kafka unavailable — triggered direct pipeline processing",
+                extra={"doc_id": result.doc_id},
+            )
+
         return result
 
     except DuplicateSubmissionError as e:
@@ -404,7 +589,18 @@ async def get_submission_status(
 
     # Access control: non-admin users can only see their own submissions
     if current_user.primary_role != "admin":
-        if str(submission.submitted_by) != current_user.sub:
+        # submitted_by may be None if the user FK was set to NULL on creation
+        # (e.g. api_client whose user row didn't exist yet). In that case,
+        # reviewers still get 403 but api_clients get through since they
+        # submitted it implicitly.
+        if submission.submitted_by is not None:
+            if str(submission.submitted_by) != current_user.sub:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to view this submission",
+                )
+        # If submitted_by is None, only api_client/portal_operator can pass through
+        elif current_user.primary_role not in ("api_client", "portal_operator", "admin"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to view this submission",

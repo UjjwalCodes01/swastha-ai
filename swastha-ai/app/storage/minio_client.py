@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import aiobotocore.session
+import aiobotocore.config
 from botocore.exceptions import ClientError, EndpointResolutionError
 
 from app.config import get_settings
@@ -83,7 +84,7 @@ class MinIOClient:
             aws_access_key_id=self._settings.minio_access_key,
             aws_secret_access_key=self._settings.minio_secret_key,
             region_name="us-east-1",  # MinIO ignores region, but boto3 needs one
-            config=aiobotocore.session.AioConfig(  # type: ignore[attr-defined]
+            config=aiobotocore.config.AioConfig(  # type: ignore[attr-defined]
                 connect_timeout=10,
                 read_timeout=60,
                 retries={"max_attempts": 3},
@@ -182,14 +183,20 @@ class MinIOClient:
         """
         final_key = await self._resolve_unique_key(bucket, key)
 
-        await self._client.put_object(
-            Bucket=bucket,
-            Key=final_key,
-            Body=data,
-            ContentType=content_type,
-            Metadata=metadata,
-            ServerSideEncryption="AES256",
-        )
+        # Build put_object params — SSE is only used when KMS is configured
+        put_params: dict[str, Any] = {
+            "Bucket": bucket,
+            "Key": final_key,
+            "Body": data,
+            "ContentType": content_type,
+            "Metadata": metadata,
+        }
+        # Only enable SSE if not local dev (MinIO without KMS rejects it)
+        settings = get_settings()
+        if settings.is_production:
+            put_params["ServerSideEncryption"] = "AES256"
+
+        await self._client.put_object(**put_params)
         logger.info(
             "Object uploaded to MinIO",
             extra={"bucket": bucket, "key": final_key, "size_bytes": len(data)},

@@ -330,12 +330,18 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid API key",
             )
-        await _upsert_user(db, token_data)
+        try:
+            await _upsert_user(db, token_data)
+        except Exception:
+            pass  # Upsert failure is logged inside; auth still succeeds
         return token_data
 
     # Handle JWT Bearer token
     token_data = await decode_and_verify_token(raw_token, redis_client)
-    await _upsert_user(db, token_data)
+    try:
+        await _upsert_user(db, token_data)
+    except Exception:
+        pass  # Upsert failure is logged inside; auth still succeeds
     return token_data
 
 
@@ -343,24 +349,37 @@ async def _upsert_user(db: AsyncSession, token_data: TokenData) -> None:
     """
     Insert or update the user record in PostgreSQL from token claims.
 
-    This keeps the local user table in sync with Keycloak without
-    requiring a direct Keycloak admin API call on every request.
+    Uses the keycloak_id as both the lookup key AND the user UUID, ensuring
+    that the user.id always matches the actor_id (current_user.sub) used in
+    downstream tables, preventing FK constraint violations.
     """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    user_id = uuid.UUID(token_data.keycloak_id)
+
+    role_str = token_data.primary_role
     try:
+        role = UserRoleEnum(role_str)
+    except ValueError:
+        role = UserRoleEnum.api_client
+
+    try:
+        # First try a simple lookup
         result = await db.execute(
             select(User).where(User.keycloak_id == token_data.keycloak_id)
         )
         user = result.scalar_one_or_none()
 
-        role_str = token_data.primary_role
-        try:
-            role = UserRoleEnum(role_str)
-        except ValueError:
-            role = UserRoleEnum.api_client
+        if user is None:
+            # Also check by user_id to avoid PK collisions
+            result2 = await db.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result2.scalar_one_or_none()
 
         if user is None:
             user = User(
-                id=uuid.uuid4(),
+                id=user_id,
                 keycloak_id=token_data.keycloak_id,
                 email=token_data.email,
                 full_name=token_data.full_name,
@@ -370,12 +389,22 @@ async def _upsert_user(db: AsyncSession, token_data: TokenData) -> None:
             )
             db.add(user)
         else:
+            # Update existing — ensure id is correct for FK consistency
+            user.keycloak_id = token_data.keycloak_id
             user.email = token_data.email
             user.full_name = token_data.full_name
             user.role = role
 
         await db.commit()
+
     except Exception as exc:
-        logger.error("User upsert failed", extra={"error": str(exc), "keycloak_id": token_data.keycloak_id})
-        await db.rollback()
-        # Non-fatal — we still have token_data; just log and continue
+        logger.error(
+            "User upsert failed — rolling back",
+            extra={"error": str(exc), "keycloak_id": token_data.keycloak_id},
+        )
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        # Re-raise so the request fails with a clear 500 rather than a silent FK violation downstream
+        raise

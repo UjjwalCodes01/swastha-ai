@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@config "../tailwind.config.js";
+
+@layer base {
+  :root {
+    --background: 40 33% 96%; /* #f5f1e8 from the screenshot reference */
+    --foreground: 20 14% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 4%;
+    --primary: 24 90% 55%; /* Orange accent */
+    --primary-foreground: 0 0% 100%;
+    --muted: 40 20% 90%;
+    --muted-foreground: 25 5% 45%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --border: 40 20% 90%;
+  }
+
+  .dark {
+    --background: 20 14% 4%;
+    --foreground: 40 33% 96%;
+    --card: 24 10% 10%;
+    --card-foreground: 40 33% 96%;
+    --primary: 24 90% 55%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 24 10% 20%;
+    --muted-foreground: 40 20% 70%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+    --border: 24 10% 20%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

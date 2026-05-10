@@ -38,11 +38,14 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.md_online_adapter import MDOnlineAdapter
 from app.adapters.sugam_adapter import SUGAMAdapter
+from app.ai_core.consumer import AICoreConsumer
 from app.audit.logger import close_audit_logger, init_audit_logger
+from app.compliance.consumer import ComplianceConsumer
 from app.config import get_settings
 from app.db.connection import close_db, get_session_factory, init_db
 from app.dependencies import close_redis, init_redis
 from app.ingestion.router import router as ingestion_router
+from app.output.router import router as output_router
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.preprocessing.consumer import PreprocessorConsumer
@@ -69,7 +72,7 @@ def configure_logging(log_level: str) -> None:
             from app.middleware.request_id import get_request_id
 
             log_obj: dict[str, Any] = {
-                "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%f"),
+                "timestamp": __import__("datetime").datetime.fromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),
@@ -170,12 +173,24 @@ async def lifespan(app: FastAPI):
     logger.info("Portal adapters started")
 
     # 7. Layer 1 Preprocessor Consumer
-    if settings.model_config.get("ENABLE_PREPROCESSOR", "true").lower() == "true":
+    if settings.enable_preprocessor:
         preprocessor = PreprocessorConsumer()
         _adapter_tasks.append(asyncio.create_task(preprocessor.start(), name="preprocessor-consumer"))
         logger.info("Layer 1 Preprocessor Consumer started")
 
-    logger.info("SwasthaAI Layer 0 & 1 startup complete — ready to serve requests")
+    # 8. Layer 3 AI Core Consumer
+    if settings.enable_ai_core:
+        ai_core = AICoreConsumer()
+        _adapter_tasks.append(asyncio.create_task(ai_core.start(), name="ai-core-consumer"))
+        logger.info("Layer 3 AI Core Consumer started")
+
+    # 9. Layer 4 Compliance & Governance Consumer
+    if settings.enable_compliance:
+        compliance = ComplianceConsumer()
+        _adapter_tasks.append(asyncio.create_task(compliance.start(), name="compliance-consumer"))
+        logger.info("Layer 4 Compliance Consumer started")
+
+    logger.info("SwasthaAI Layers 0-4 startup complete — ready to serve requests")
 
     yield  # Application is now running
 
@@ -246,7 +261,47 @@ or an X-API-Key header for machine-to-machine calls.
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "Ingestion", "description": "Document submission and ingestion endpoints"},
+        {"name": "Output & Delivery", "description": "Results, compliance, and dashboard endpoints"},
+    ],
 )
+
+# ── OpenAPI Security Schemes ───────────────────────────────────────────────────
+# Inject X-API-Key and Bearer into the OpenAPI spec so Swagger UI
+# shows an Authorize button and sends the header automatically.
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+    schema["components"] = schema.get("components", {})
+    schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for machine-to-machine calls. Use the key from your .env API_KEYS setting.",
+        },
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Keycloak JWT Bearer token.",
+        },
+    }
+    # Apply security globally to all operations
+    schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 # Order matters: middleware is applied in reverse registration order.
@@ -276,6 +331,7 @@ else:
 # ── Routers ────────────────────────────────────────────────────────────────────
 
 app.include_router(ingestion_router)
+app.include_router(output_router, prefix="/api/v1")
 
 
 # ── Global Exception Handlers ─────────────────────────────────────────────────
@@ -307,6 +363,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         content={
             "error": "Internal server error",
             "request_id": request_id,
+            "detail": str(exc),
+            "type": type(exc).__name__,
         },
     )
 

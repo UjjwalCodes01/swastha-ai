@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.logger import write_audit_event
 from app.config import get_settings
-from app.db.models import Submission, SubmissionStatusEnum
+from app.db.models import Submission, SubmissionStatusEnum, User
 from app.ingestion.schemas import (
     BulkDocumentEntry,
     BulkDocumentError,
@@ -584,6 +584,21 @@ class IngestionService:
         """Create and persist the Submission ORM record."""
         from app.db.models import PortalSourceEnum, SubmissionTypeEnum
 
+        # Resolve submitted_by: only set FK if the user actually exists in DB.
+        # If _upsert_user failed earlier (rolled back), we set NULL to avoid FK violation.
+        # The actor_id is still preserved in the Kafka payload and audit log.
+        submitted_by_uuid: uuid.UUID | None = None
+        if actor_id:
+            try:
+                user_uuid = uuid.UUID(actor_id)
+                user_result = await self._db.execute(
+                    select(User.id).where(User.id == user_uuid)
+                )
+                if user_result.scalar_one_or_none() is not None:
+                    submitted_by_uuid = user_uuid
+            except Exception:
+                pass  # Malformed UUID or DB error — leave as None
+
         submission = Submission(
             id=uuid.uuid4(),
             doc_id=doc_id,
@@ -596,7 +611,7 @@ class IngestionService:
             checksum_sha256=checksum,
             raw_storage_path=storage_path,
             status=SubmissionStatusEnum.ingested,
-            submitted_by=uuid.UUID(actor_id) if actor_id else None,
+            submitted_by=submitted_by_uuid,
             ip_address=ip_address,
             user_agent=user_agent,
             metadata_=metadata,
@@ -608,3 +623,4 @@ class IngestionService:
         await self._db.commit()
         await self._db.refresh(submission)
         return submission
+

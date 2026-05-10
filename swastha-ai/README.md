@@ -27,11 +27,23 @@ Useful consoles:
 
 ## Run Tests
 
+Lightweight unit tests use `requirements-test.txt` so contributors can run them
+on Windows, macOS, or Linux without installing the full OCR/ML stack.
+
+Windows PowerShell:
+
+```powershell
+cd swastha-ai
+python scripts\bootstrap_test_env.py
+python scripts\run_tests.py tests\ai_core tests\compliance
+```
+
+macOS/Linux:
+
 ```bash
 cd swastha-ai
-python -m venv venv
-./venv/bin/pip install -r requirements.txt
-./venv/bin/pytest tests
+python3 scripts/bootstrap_test_env.py
+python3 scripts/run_tests.py tests/ai_core tests/compliance
 ```
 
 The tests use mocked MinIO, Kafka, Redis, and JWT verification plus an async SQLite database.

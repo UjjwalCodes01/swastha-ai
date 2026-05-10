@@ -15,6 +15,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -249,3 +250,54 @@ class RateLimitViolation(Base):
 
     def __repr__(self) -> str:
         return f"<RateLimitViolation ip={self.ip_address} count={self.violation_count}>"
+
+
+class ComplianceAssessment(Base):
+    """Layer 4 governance decision for a Layer 3 AI output."""
+
+    __tablename__ = "compliance_assessments"
+    __table_args__ = (
+        Index("ix_compliance_doc_id", "doc_id"),
+        Index("ix_compliance_decision", "decision"),
+        Index("ix_compliance_source_event", "source_event"),
+        Index("ix_compliance_assessed_at", "assessed_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID_TYPE, primary_key=True, default=uuid.uuid4)
+    doc_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_event: Mapped[str] = mapped_column(String(200), nullable=False)
+    decision: Mapped[str] = mapped_column(String(30), nullable=False)
+    frameworks_checked: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
+    findings: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
+    human_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class XAIDecisionLog(Base):
+    """Explainability record for every AI decision crossing Layer 4."""
+
+    __tablename__ = "xai_decision_log"
+    __table_args__ = (
+        Index("ix_xai_doc_id", "doc_id"),
+        Index("ix_xai_module", "module_name"),
+        Index("ix_xai_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID_TYPE, primary_key=True, default=uuid.uuid4)
+    doc_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    module_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    decision_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    input_refs: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False, default=dict)
+    output_refs: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False, default=dict)
+    rationale: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

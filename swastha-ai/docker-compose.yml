@@ -12,6 +12,7 @@ volumes:
   kafka_data:
   zookeeper_data:
   zookeeper_log:
+  chroma_data:
 
 services:
   # ─────────────────────────────────────────────
@@ -189,6 +190,29 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  # ─────────────────────────────────────────────
+  # ChromaDB Vector Store
+  # ─────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:0.5.7
+    container_name: swastha-ai-chromadb
+    restart: unless-stopped
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+      CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER: ""
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8002:8000"
+    networks:
+      - swastha-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   # ─────────────────────────────────────────────
   # SwasthaAI FastAPI Application

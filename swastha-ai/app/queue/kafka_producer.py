@@ -81,12 +81,16 @@ class KafkaProducerClient:
 
     async def _connect(self) -> None:
         """Create and start the aiokafka producer."""
+        if self._settings.kafka_bootstrap_servers == "dummy":
+            logger.info("Kafka is disabled (dummy bootstrap servers). Using mock producer.")
+            self._is_kafka_available = False
+            return
+            
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self._settings.kafka_bootstrap_servers,
             # Reliability settings
             acks="all",
             enable_idempotence=True,
-            retries=5,
             retry_backoff_ms=500,
             # Performance
             compression_type="lz4",

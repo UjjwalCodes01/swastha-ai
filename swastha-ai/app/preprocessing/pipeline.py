@@ -338,13 +338,16 @@ class PreprocessingPipeline:
         bucket = "swastha-ai-processed-documents"
         json_bytes = json.dumps(data, ensure_ascii=False).encode("utf-8")
         
+        # Access the raw aiobotocore client through the MinIOClient wrapper
+        client = self.minio._client
+        
         # Ensure bucket exists
         try:
-            await self.minio.head_bucket(Bucket=bucket)
+            await client.head_bucket(Bucket=bucket)
         except Exception:
-            await self.minio.create_bucket(Bucket=bucket)
+            await client.create_bucket(Bucket=bucket)
             
-        await self.minio.put_object(
+        await client.put_object(
             Bucket=bucket,
             Key=path,
             Body=json_bytes,
