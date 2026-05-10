@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, User, Bell, Shield, Database } from 'lucide-react';
+import { User, Bell, Shield, Database } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Settings = () => {

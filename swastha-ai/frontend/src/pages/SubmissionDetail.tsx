@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Check, X, FileText, AlertTriangle, Info,
+  ArrowLeft, Check, X, FileText, AlertTriangle,
   Download, Loader2, ShieldAlert, Brain, Cpu, Eye,
 } from 'lucide-react';
 import { fetchSubmissionDetail, submitReviewerAction, downloadPdfReport, type SubmissionDetail } from '../lib/api';
