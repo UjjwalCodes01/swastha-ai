@@ -40,7 +40,7 @@ CDSCO currently reviews thousands of documents manually: drug submissions, medic
 | **0** | Portal Ingestion | FastAPI, MinIO, SHA-256, ClamAV | Live |
 | **1** | Preprocessing Engine | PyMuPDF, Tesseract OCR, sentence-transformers, ChromaDB | Live |
 | **2** | Message Bus | Apache Kafka (KRaft), Avro, Schema Registry, Redis | Live |
-| **3** | AI Core | Google Gemini 1.5, Groq/Llama 3, Ollama (offline), Microsoft Presidio | Live |
+| **3** | AI Core | Google Gemini 2.5, Groq/Llama 3, Ollama (offline), Microsoft Presidio | Live |
 | **4** | Compliance and Governance | DPDP 2023, ICMR, NDHM rule engines, XAI Decision Log | Live |
 | **5** | Data Storage | Supabase PostgreSQL 15, MinIO S3, ChromaDB, Redis | Live |
 | **6** | Output and Delivery | React Dashboard (Vite + TanStack Query), PDF Reports | Live |
@@ -65,7 +65,7 @@ flowchart TD
 ### LLM Fallback Chain
 
 ```
-Gemini 1.5 Flash  -->  Groq / Llama 3 70B  -->  Anthropic Claude  -->  Ollama (offline)
+Gemini 2.5 Flash  -->  Groq / Llama 3 70B  -->  Anthropic Claude  -->  Ollama (offline)
 ```
 
 Model behaviour is controlled by `AI_CORE_MODEL_MODE` in `.env`.
