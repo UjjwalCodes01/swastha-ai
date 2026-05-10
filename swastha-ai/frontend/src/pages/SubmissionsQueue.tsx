@@ -64,13 +64,26 @@ const SubmissionsQueue = () => {
       sub.applicant.toLowerCase().includes(search.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, priority?: string) => {
     switch (status) {
       case 'processed':
+        const isAutoApproved = priority === 'low' || priority === 'informational';
+        if (!isAutoApproved && priority) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <CheckCircle2 size={14} /> Processed
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400">
+            <CheckCircle2 size={14} /> Auto-Approved
+          </span>
+        );
       case 'reviewed':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400">
-            <CheckCircle2 size={14} /> {status === 'reviewed' ? 'Reviewed' : 'Auto-Approved'}
+            <CheckCircle2 size={14} /> Reviewed
           </span>
         );
       case 'review_required':
@@ -357,7 +370,7 @@ const SubmissionsQueue = () => {
                       <td className="px-6 py-5 text-foreground font-semibold text-sm">{sub.applicant}</td>
                       <td className="px-6 py-5 text-muted-foreground capitalize font-medium text-xs tracking-tight">{sub.type.replace(/_/g, ' ')}</td>
                       <td className="px-6 py-5">{getPriorityBadge(sub.priority)}</td>
-                      <td className="px-6 py-5">{getStatusBadge(sub.status)}</td>
+                      <td className="px-6 py-5">{getStatusBadge(sub.status, sub.priority)}</td>
                       <td className="px-6 py-5 text-muted-foreground font-medium text-xs">{sub.received}</td>
                       <td className="px-6 py-5 text-right">
                         <div className="inline-flex items-center justify-end bg-muted/30 px-2 py-1 rounded-lg border border-border/50 shadow-inner">
