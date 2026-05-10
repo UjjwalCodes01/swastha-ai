@@ -183,7 +183,7 @@ class MinIOClient:
         """
         final_key = await self._resolve_unique_key(bucket, key)
 
-        # Build put_object params — SSE is only used when KMS is configured
+        # Build put_object params
         put_params: dict[str, Any] = {
             "Bucket": bucket,
             "Key": final_key,
@@ -191,10 +191,6 @@ class MinIOClient:
             "ContentType": content_type,
             "Metadata": metadata,
         }
-        # Only enable SSE if not local dev (MinIO without KMS rejects it)
-        settings = get_settings()
-        if settings.is_production:
-            put_params["ServerSideEncryption"] = "AES256"
 
         await self._client.put_object(**put_params)
         logger.info(
