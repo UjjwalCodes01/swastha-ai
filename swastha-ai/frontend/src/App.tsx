@@ -3,6 +3,8 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import SubmissionsQueue from './pages/SubmissionsQueue';
 import SubmissionDetail from './pages/SubmissionDetail';
+import Compliance from './pages/Compliance';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="submissions" element={<SubmissionsQueue />} />
           <Route path="submissions/:id" element={<SubmissionDetail />} />
+          <Route path="compliance" element={<Compliance />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

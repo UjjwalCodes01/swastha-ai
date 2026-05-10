@@ -59,7 +59,9 @@ _MAGIC_TO_CANONICAL: dict[str, str] = {
     "text/xml": "application/xml",
     # CSV
     "text/csv": "text/csv",
-    "text/plain": "text/csv",  # CSV without BOM often detected as text/plain
+    # Plain text — includes CSV without BOM, JSON blobs, and plain text docs.
+    # We accept text/plain as its own type; downstream processing will handle detection.
+    "text/plain": "text/plain",
     # JSON
     "application/json": "application/json",
     "text/json": "application/json",
@@ -115,13 +117,17 @@ def validate_mime_by_magic_bytes(
     if claimed_mime_type and claimed_mime_type != "application/octet-stream":
         claimed_canonical = _MAGIC_TO_CANONICAL.get(claimed_mime_type, claimed_mime_type)
         if canonical != claimed_canonical:
-            return ValidationResult(
-                passed=False,
-                reason=(
-                    f"MIME type mismatch: file content is '{canonical}' "
-                    f"but Content-Type claims '{claimed_mime_type}'"
-                ),
-            )
+            # Allow text/plain detected when the claimed type is also text-based.
+            # Magic cannot reliably distinguish JSON, CSV, and XML from plain text.
+            text_based = {"text/plain", "text/csv", "application/json", "application/xml"}
+            if not (canonical in text_based and claimed_canonical in text_based):
+                return ValidationResult(
+                    passed=False,
+                    reason=(
+                        f"MIME type mismatch: file content is '{canonical}' "
+                        f"but Content-Type claims '{claimed_mime_type}'"
+                    ),
+                )
 
     return ValidationResult(passed=True, reason=f"MIME type '{canonical}' is allowed")
 

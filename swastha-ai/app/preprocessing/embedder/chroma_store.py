@@ -35,8 +35,9 @@ class ChromaStore:
         if chromadb is None:
             raise ImportError("chromadb not installed")
         
-        # We use the new async client
-        self._client = await chromadb.AsyncHttpClient(
+        import asyncio
+        self._client = await asyncio.to_thread(
+            chromadb.HttpClient,
             host=self.host,
             port=self.port,
             settings=ChromaSettings(anonymized_telemetry=False),
@@ -75,8 +76,9 @@ class ChromaStore:
         collection_name = self._get_collection_name(submission_type)
         
         try:
-            # Create if not exists using the async client
-            collection = await self._client.get_or_create_collection(
+            import asyncio
+            collection = await asyncio.to_thread(
+                self._client.get_or_create_collection,
                 name=collection_name,
                 metadata={"description": f"RxFlow {submission_type} vectors"}
             )
@@ -110,7 +112,9 @@ class ChromaStore:
                 metadatas.append(meta)
 
             # Upsert
-            await collection.upsert(
+            import asyncio
+            await asyncio.to_thread(
+                collection.upsert,
                 ids=ids,
                 embeddings=embeddings,
                 metadatas=metadatas,
@@ -134,7 +138,8 @@ class ChromaStore:
         """Delete all chunks for a document (used during reprocessing/rollback)."""
         collection_name = self._get_collection_name(submission_type)
         try:
-            collection = await self._client.get_collection(name=collection_name)
-            await collection.delete(where={"doc_id": doc_id})
+            import asyncio
+            collection = await asyncio.to_thread(self._client.get_collection, name=collection_name)
+            await asyncio.to_thread(collection.delete, where={"doc_id": doc_id})
         except Exception:
             pass  # Collection might not exist

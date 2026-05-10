@@ -208,7 +208,7 @@ def upgrade() -> None:
 
     # REVOKE UPDATE and DELETE on audit_log from the app user
     # This enforces the tamper-evident, append-only constraint at the DB level.
-    op.execute(f"REVOKE UPDATE, DELETE ON audit_log FROM {APP_DB_USER}")
+    op.execute(f'REVOKE UPDATE, DELETE ON audit_log FROM "{APP_DB_USER}"')
 
     # ── rate_limit_violations ─────────────────────────────────────────────────
     op.create_table(
@@ -239,7 +239,7 @@ def downgrade() -> None:
 
     # Restore REVOKE before dropping (grants it back so we can drop)
     APP_DB_USER_ = os.environ.get("POSTGRES_USER", "swastha-ai")
-    op.execute(f"GRANT UPDATE, DELETE ON audit_log TO {APP_DB_USER_}")
+    op.execute(f'GRANT UPDATE, DELETE ON audit_log TO "{APP_DB_USER_}"')
     op.drop_table("audit_log")
     op.drop_table("submissions")
     op.drop_table("users")

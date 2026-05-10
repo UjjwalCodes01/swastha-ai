@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 import uuid
 from datetime import datetime, timezone
@@ -21,14 +22,23 @@ from app.ai_core.topics import (
     REPORTS_GENERATED,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class AICorePipeline:
     """Coordinates anonymisation, summarisation, classification, and comparison."""
 
-    def __init__(self, minio_client: Any, producer: Any, db_session_factory: Any | None = None) -> None:
+    def __init__(
+        self,
+        minio_client: Any,
+        producer: Any,
+        db_session_factory: Any | None = None,
+        chroma_client: Any | None = None,
+    ) -> None:
         self.minio = minio_client
         self.producer = producer
         self.db_session_factory = db_session_factory
+        self.chroma_client = chroma_client
         self.anonymiser = Anonymiser()
         self.summariser = Summariser()
         self.classifier = Classifier()
@@ -74,8 +84,23 @@ class AICorePipeline:
         artefact = await load_json(self.minio, event["anonymised_storage_path"])
         text = artefact.get("anonymised_text", "")
         metadata = artefact.get("metadata", {})
-        summary = self.summariser.summarise(event["doc_id"], event["submission_type"], text, metadata)
-        scorecard = self.classifier.classify(event["doc_id"], event["submission_type"], text, metadata)
+
+        # Retrieve stored embedding for this doc (if available) for dedup
+        embedding = await self._load_doc_embedding(event["doc_id"])
+
+        # Run summarisation and classification concurrently
+        import asyncio
+        summary, scorecard = await asyncio.gather(
+            self.summariser.async_summarise(event["doc_id"], event["submission_type"], text, metadata),
+            self.classifier.async_classify(
+                event["doc_id"],
+                event["submission_type"],
+                text,
+                metadata,
+                embedding=embedding,
+                chroma_client=self.chroma_client,
+            ),
+        )
 
         summary_path = self._artefact_path(event["submission_type"], event["doc_id"], "summary.json")
         await save_json(self.minio, summary_path, summary.model_dump())
@@ -136,11 +161,37 @@ class AICorePipeline:
         await self._record_ai_decision(event["doc_id"], "classification", scorecard.model_dump())
         return {"summary": summary_payload, "classification": classified_payload}
 
+    async def _load_doc_embedding(self, doc_id: str) -> list[float] | None:
+        """Try to retrieve the stored embedding for a document from the DB or ChromaDB."""
+        if not self.db_session_factory:
+            return None
+        try:
+            from sqlalchemy import text
+            async with self.db_session_factory() as session:
+                result = await session.execute(
+                    text("""
+                        SELECT embedding FROM document_chunks
+                        WHERE doc_id = :doc_id AND chunk_index = 0
+                        LIMIT 1
+                    """),
+                    {"doc_id": doc_id},
+                )
+                row = result.first()
+                if row and row[0]:
+                    import json
+                    emb = row[0]
+                    if isinstance(emb, str):
+                        emb = json.loads(emb)
+                    return emb if isinstance(emb, list) else None
+        except Exception as exc:
+            logger.debug("Could not load embedding for dedup", extra={"doc_id": doc_id, "error": str(exc)})
+        return None
+
     async def handle_comparison_requested(self, event: dict[str, Any]) -> dict[str, Any]:
         start = time.perf_counter()
         doc_a = await self._load_latest_anonymised(event["doc_id_a"])
         doc_b = await self._load_latest_anonymised(event["doc_id_b"])
-        result = self.comparator.compare(
+        result = await self.comparator.async_compare(
             event["comparison_id"],
             event["doc_id_a"],
             event["doc_id_b"],
@@ -215,26 +266,21 @@ class AICorePipeline:
     async def _record_ai_decision(self, doc_id: str, decision_type: str, detail: dict[str, Any]) -> None:
         if not self.db_session_factory:
             return
-        from sqlalchemy import text
+        from app.db.models import AuditLog
 
         try:
             async with self.db_session_factory() as session:
-                await session.execute(
-                    text("""
-                        INSERT INTO audit_log
-                        (event_type, doc_id, action_detail, outcome, entry_hash, prev_hash)
-                        VALUES (:event_type, :doc_id, :detail, 'success', :entry_hash, :prev_hash)
-                    """),
-                    {
-                        "event_type": f"ai_core.{decision_type}",
-                        "doc_id": doc_id,
-                        "detail": detail,
-                        "entry_hash": hashlib.sha256(
-                            f"ai-core:{decision_type}:{doc_id}:{time.time_ns()}".encode()
-                        ).hexdigest(),
-                        "prev_hash": "managed-by-audit-logger",
-                    },
+                entry = AuditLog(
+                    event_type=f"ai_core.{decision_type}",
+                    doc_id=doc_id,
+                    action_detail=detail,
+                    outcome="success",
+                    entry_hash=hashlib.sha256(
+                        f"ai-core:{decision_type}:{doc_id}:{time.time_ns()}".encode()
+                    ).hexdigest(),
+                    prev_hash="managed-by-audit-logger",
                 )
+                session.add(entry)
                 await session.commit()
         except Exception:
             # Audit logger is authoritative elsewhere; Layer 3 must not fail a document

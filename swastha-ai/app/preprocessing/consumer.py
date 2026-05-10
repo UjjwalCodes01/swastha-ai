@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import signal
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -169,8 +170,8 @@ class PreprocessorConsumer:
             # 3. Download raw file from MinIO
             file_bytes = await self._download_file(payload.raw_storage_path)
 
-            # 4. Run Pipeline
-            await self.pipeline.process_document(
+            # 4. Run Preprocessing Pipeline
+            result = await self.pipeline.process_document(
                 doc_id=doc_id,
                 file_bytes=file_bytes,
                 submission_type=payload.submission_type,
@@ -178,6 +179,73 @@ class PreprocessorConsumer:
                 submitted_by=payload.submitted_by,
                 original_filename=payload.original_filename,
             )
+
+            # 4b. Run AI Core (Anonymisation + Summarisation + Classification)
+            # directly in-process so results are available immediately
+            try:
+                from app.ai_core.pipeline import AICorePipeline
+                from app.compliance.pipeline import CompliancePipeline
+                from app.db.connection import get_session_factory as _gsf
+                from datetime import datetime as _dt, timezone as _tz
+
+                producer = await get_kafka_producer()
+                session_factory = _gsf()
+                minio_client = await get_minio_client()
+                
+                ai_pipeline = AICorePipeline(
+                    minio_client=minio_client,
+                    producer=producer,
+                    db_session_factory=session_factory,
+                    chroma_client=None,
+                )
+                now = _dt.now(_tz.utc)
+                processed_path = f"processed/{payload.submission_type}/{now.year}/{now.month:02d}/{now.day:02d}/{doc_id}/processed.json"
+                preprocessed_event = {
+                    "doc_id": doc_id,
+                    "processed_storage_path": processed_path,
+                    "submission_type": payload.submission_type,
+                    "portal_source": payload.portal_source,
+                    "submitted_by": payload.submitted_by,
+                    "original_filename": payload.original_filename,
+                }
+                
+                # Run AI Core
+                anon_payload = await ai_pipeline.handle_preprocessed(preprocessed_event)
+                ai_results = await ai_pipeline.handle_anonymised(anon_payload)
+                logger.info(f"AI Core completed for {doc_id}")
+
+                # 4c. Run Compliance & Governance directly
+                # Because Kafka might be unavailable in local dev, we run Layer 4 directly here.
+                comp_pipeline = CompliancePipeline(
+                    minio_client=minio_client,
+                    producer=producer,
+                    db_session_factory=session_factory,
+                )
+                
+                # We simulate the Kafka events that would normally trigger compliance checks
+                await comp_pipeline.assess("documents.anonymised", anon_payload)
+                if "summary" in ai_results:
+                    await comp_pipeline.assess("documents.summarised", ai_results["summary"])
+                if "classification" in ai_results:
+                    await comp_pipeline.assess("documents.classified", ai_results["classification"])
+                    
+                logger.info(f"Compliance checks completed for {doc_id}")
+
+            except Exception as ai_exc:
+                logger.warning(f"AI/Compliance layers failed for {doc_id}: {ai_exc}", exc_info=True)
+                try:
+                    from app.audit.logger import write_audit_event
+                    async with session_factory() as session:
+                        await write_audit_event(
+                            session,
+                            event_type="ai_core.pipeline_failed",
+                            outcome="failure",
+                            doc_id=doc_id,
+                            action_detail={"error": str(ai_exc)}
+                        )
+                        await session.commit()
+                except Exception:
+                    pass
 
             # 5. Success: Commit Offset
             await self.consumer.commit({tp: msg.offset + 1})
@@ -207,8 +275,10 @@ class PreprocessorConsumer:
     async def _download_file(self, minio_path: str) -> bytes:
         minio = await get_minio_client()
         bucket = self.settings.minio_bucket_raw
-        response = await minio.get_object(Bucket=bucket, Key=minio_path)
-        return await response["Body"].read()
+        # MinIOClient is a wrapper; access the raw aiobotocore client
+        response = await minio._client.get_object(Bucket=bucket, Key=minio_path)
+        body = await response["Body"].read()
+        return body
 
     async def _update_status(self, doc_id: str, status: str) -> None:
         from sqlalchemy import text

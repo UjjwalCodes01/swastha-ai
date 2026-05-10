@@ -72,7 +72,7 @@ def configure_logging(log_level: str) -> None:
             from app.middleware.request_id import get_request_id
 
             log_obj: dict[str, Any] = {
-                "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%f"),
+                "timestamp": __import__("datetime").datetime.fromtimestamp(record.created).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),
@@ -261,7 +261,47 @@ or an X-API-Key header for machine-to-machine calls.
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "Ingestion", "description": "Document submission and ingestion endpoints"},
+        {"name": "Output & Delivery", "description": "Results, compliance, and dashboard endpoints"},
+    ],
 )
+
+# ── OpenAPI Security Schemes ───────────────────────────────────────────────────
+# Inject X-API-Key and Bearer into the OpenAPI spec so Swagger UI
+# shows an Authorize button and sends the header automatically.
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+    schema["components"] = schema.get("components", {})
+    schema["components"]["securitySchemes"] = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for machine-to-machine calls. Use the key from your .env API_KEYS setting.",
+        },
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Keycloak JWT Bearer token.",
+        },
+    }
+    # Apply security globally to all operations
+    schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 # Order matters: middleware is applied in reverse registration order.
@@ -323,6 +363,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         content={
             "error": "Internal server error",
             "request_id": request_id,
+            "detail": str(exc),
+            "type": type(exc).__name__,
         },
     )
 

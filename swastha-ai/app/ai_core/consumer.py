@@ -43,7 +43,32 @@ class AICoreConsumer:
 
         minio = await get_minio_client()
         producer = await get_kafka_producer()
-        self.pipeline = AICorePipeline(minio, producer, get_session_factory())
+
+        # Attempt to connect to ChromaDB for duplicate detection
+        chroma_client = None
+        try:
+            import chromadb
+            from chromadb.config import Settings as ChromaSettings
+            import asyncio
+            chroma_client = await asyncio.to_thread(
+                chromadb.HttpClient,
+                host=self.settings.chroma_host,
+                port=self.settings.chroma_port,
+                settings=ChromaSettings(anonymized_telemetry=False),
+            )
+            logger.info("ChromaDB connected for AI Core duplicate detection")
+        except Exception as exc:
+            logger.warning(
+                "ChromaDB unavailable — duplicate detection disabled",
+                extra={"error": str(exc)},
+            )
+
+        self.pipeline = AICorePipeline(
+            minio,
+            producer,
+            get_session_factory(),
+            chroma_client=chroma_client,
+        )
         self.consumer = AIOKafkaConsumer(
             *AI_CORE_INPUT_TOPICS,
             bootstrap_servers=self.settings.kafka_bootstrap_servers,

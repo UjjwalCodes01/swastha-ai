@@ -126,8 +126,11 @@ class Settings(BaseSettings):
 
     # Layer 3 AI Core
     enable_ai_core: bool = True
-    ai_core_model_mode: Literal["offline", "hybrid", "cloud"] = "offline"
+    ai_core_model_mode: Literal["offline", "hybrid", "cloud", "groq", "gemini"] = "gemini"
     anthropic_api_key: str = ""
+    groq_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-1.5-flash"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     ai_core_processed_bucket: str = "swastha-ai-processed-documents"

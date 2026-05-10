@@ -92,48 +92,35 @@ class CompliancePipeline:
         )
 
     async def _persist_decision(self, decision: ComplianceDecision, xai_record: dict) -> None:
+        from app.db.models import ComplianceAssessment, XAIDecisionLog
         async with self.db_session_factory() as session:
-            await session.execute(
-                text("""
-                    INSERT INTO compliance_assessments
-                    (doc_id, source_event, decision, frameworks_checked, findings,
-                     human_review_required, blocked, confidence, assessed_at)
-                    VALUES (:doc_id, :source_event, :decision, :frameworks, :findings,
-                            :review, :blocked, :confidence, :assessed_at)
-                """),
-                {
-                    "doc_id": decision.doc_id,
-                    "source_event": decision.source_event,
-                    "decision": decision.decision,
-                    "frameworks": decision.frameworks_checked,
-                    "findings": [finding.model_dump() for finding in decision.findings],
-                    "review": decision.human_review_required,
-                    "blocked": decision.blocked,
-                    "confidence": decision.confidence,
-                    "assessed_at": datetime.now(timezone.utc),
-                },
+            assessment = ComplianceAssessment(
+                doc_id=decision.doc_id,
+                source_event=decision.source_event,
+                decision=decision.decision,
+                frameworks_checked=decision.frameworks_checked,
+                findings=[finding.model_dump() for finding in decision.findings],
+                human_review_required=decision.human_review_required,
+                blocked=decision.blocked,
+                confidence=decision.confidence,
+                assessed_at=datetime.now(timezone.utc),
             )
-            await session.execute(
-                text("""
-                    INSERT INTO xai_decision_log
-                    (doc_id, module_name, model_id, model_version, confidence,
-                     decision_summary, input_refs, output_refs, rationale, created_at)
-                    VALUES (:doc_id, :module_name, :model_id, :model_version, :confidence,
-                            :summary, :input_refs, :output_refs, :rationale, :created_at)
-                """),
-                {
-                    "doc_id": xai_record["doc_id"],
-                    "module_name": xai_record["module_name"],
-                    "model_id": xai_record["model_id"],
-                    "model_version": xai_record["model_version"],
-                    "confidence": xai_record["confidence"],
-                    "summary": xai_record["decision_summary"],
-                    "input_refs": xai_record["input_refs"],
-                    "output_refs": xai_record["output_refs"],
-                    "rationale": xai_record["rationale"],
-                    "created_at": datetime.now(timezone.utc),
-                },
+            session.add(assessment)
+
+            xai_log = XAIDecisionLog(
+                doc_id=xai_record["doc_id"],
+                module_name=xai_record["module_name"],
+                model_id=xai_record["model_id"],
+                model_version=xai_record["model_version"],
+                confidence=xai_record["confidence"],
+                decision_summary=xai_record["decision_summary"],
+                input_refs=xai_record["input_refs"],
+                output_refs=xai_record["output_refs"],
+                rationale=xai_record["rationale"],
+                created_at=datetime.now(timezone.utc),
             )
+            session.add(xai_log)
+            
             await session.commit()
 
     async def _publish_notification(self, decision: ComplianceDecision) -> None:
