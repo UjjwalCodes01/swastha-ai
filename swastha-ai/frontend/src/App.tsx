@@ -5,6 +5,7 @@ import SubmissionsQueue from './pages/SubmissionsQueue';
 import SubmissionDetail from './pages/SubmissionDetail';
 import Compliance from './pages/Compliance';
 import Settings from './pages/Settings';
+import Explainability from './pages/Explainability';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="submissions" element={<SubmissionsQueue />} />
           <Route path="submissions/:id" element={<SubmissionDetail />} />
           <Route path="compliance" element={<Compliance />} />
+          <Route path="explainability" element={<Explainability />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
