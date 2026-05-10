@@ -1,93 +1,111 @@
-# SwasthaAI Layer 0 - Portal Ingestion Layer
+# SwasthaAI — CDSCO Regulatory AI Platform
 
-Production-grade document ingestion for the CDSCO regulatory AI platform. This layer runs inside the `swastha-ai` project workspace under `swastha-ai/`.
+> **Revolutionising CDSCO regulatory processing with an enterprise-grade, 7-layer AI architecture.**  
+> Winner/Entry for the CDSCO-IndiaAI Health Innovation Hackathon.
 
-## Prerequisites
+SwasthaAI automates the ingestion, PII-anonymisation, and intelligent analysis of critical regulatory documents including Drug Submissions, Medical Device Applications, Clinical Trial Protocols, and SAE Reports.
 
-- Python 3.11+
-- Docker and Docker Compose
-- `libmagic` installed on the host for MIME detection
-- Enough local disk for PostgreSQL, MinIO, Kafka, Redis, and Keycloak volumes
+---
 
-## Start The Stack
+## 🚀 Key Features
+- **Intelligent Summarisation:** Uses Google Gemini 1.5 & Llama 3 to generate structured executive summaries.
+- **Data Privacy First:** Automated Indian PII/PHI scrubbing (Aadhaar, PAN, CIN) via Microsoft Presidio.
+- **Automated Compliance:** Instant checks against DPDP Act 2023, ICMR, and NDHM standards.
+- **7-Layer Architecture:** Decoupled, scalable design from Ingestion to Output.
+- **High-Performance Backend:** FastAPI with asynchronous database operations (Supabase/asyncpg).
 
-```bash
-cd swastha-ai
-cp .env.example .env
-docker compose up --build
-```
+---
 
-The FastAPI app listens on `http://localhost:8000`.
+## 🛠️ Local Development Setup
 
-Useful consoles:
+Follow these steps to get the full platform running on your local machine.
 
-- FastAPI docs: `http://localhost:8000/docs`
-- MinIO console: `http://localhost:9001`
-- Keycloak admin: `http://localhost:8080`
+### 1. Prerequisites
+- **Python 3.11+**
+- **Node.js 18+** & **npm**
+- **Docker Desktop** (Required for local MinIO and Redis)
 
-## Run Tests
+---
 
-Lightweight unit tests use `requirements-test.txt` so contributors can run them
-on Windows, macOS, or Linux without installing the full OCR/ML stack.
+### 2. Backend Setup (FastAPI)
 
-Windows PowerShell:
+Open your terminal and navigate to the backend folder:
 
 ```powershell
+# 1. Navigate to backend
 cd swastha-ai
-python scripts\bootstrap_test_env.py
-python scripts\run_tests.py tests\ai_core tests\compliance
+
+# 2. Create and activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+pip install "numpy<2.0.0" groq google-generativeai
+
+# 4. Set up environment variables
+# Copy .env.example to .env and fill in your Supabase & Gemini keys
+cp .env.example .env
+
+# 5. Start supporting services (MinIO/Redis)
+docker-compose up -d minio redis
+
+# 6. Run the backend server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-macOS/Linux:
+Backend is now live at: `http://localhost:8000/docs`
 
-```bash
-cd swastha-ai
-python3 scripts/bootstrap_test_env.py
-python3 scripts/run_tests.py tests/ai_core tests/compliance
+---
+
+### 3. Frontend Setup (React + Vite)
+
+Open a **new** terminal window:
+
+```powershell
+# 1. Navigate to frontend
+cd swastha-ai/frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Set up environment variables
+# Create a .env file and add:
+# VITE_API_BASE_URL=http://localhost:8000
+# VITE_API_KEY=your_generated_api_key
+echo "VITE_API_BASE_URL=http://localhost:8000" > .env
+echo "VITE_API_KEY=b7f8c9d2a1e43b56c7d8e9f0a1b2c3d4" >> .env
+
+# 4. Start the development server
+npm run dev
 ```
 
-The tests use mocked MinIO, Kafka, Redis, and JWT verification plus an async SQLite database.
+Frontend is now live at: `http://localhost:5173`
 
-## API Endpoints
+---
 
-- `POST /api/v1/ingest/submission` - upload one document. Requires `admin`, `portal_operator`, or `api_client`.
-- `POST /api/v1/ingest/bulk` - upload a ZIP with `manifest.json`. Requires `admin`.
-- `GET /api/v1/ingest/status/{doc_id}` - view submission status. Requires any authenticated role.
-- `DELETE /api/v1/ingest/submission/{doc_id}` - soft reject a submission. Requires `admin`.
-- `GET /api/v1/ingest/health` - public dependency health check.
+## 📂 Project Structure
+- `/app`: FastAPI backend source code (Layers 0-4).
+- `/frontend`: React dashboard source code (Layer 6).
+- `/alembic`: Database migration scripts.
+- `/kafka`: Avro schemas and Kafka configuration.
+- `DOCUMENTATION.md`: Full technical history and changelog.
 
-Authentication supports Keycloak Bearer JWTs and `X-API-Key` for machine clients.
+---
 
-## Environment Variables
+## 🧪 Testing the AI
+1. Login to the dashboard at `http://localhost:5173`.
+2. Click **"Upload Document"**.
+3. Select **"SAE Report"** or **"Drug Submission"**.
+4. Upload a PDF and watch the real-time AI analysis.
 
-All runtime configuration is loaded from environment variables. See `.env.example` for the full list and explanations, including:
+---
 
-- `DATABASE_URL`
-- `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET_RAW`
-- `KAFKA_BOOTSTRAP_SERVERS`
-- `REDIS_URL`
-- `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`
-- `MAX_UPLOAD_SIZE_MB`, `ALLOWED_MIME_TYPES`
-- `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_USER_PER_MINUTE`, `RATE_LIMIT_API_CLIENT_PER_MINUTE`
-- `SECRET_KEY`
-- `API_KEYS`
-- `SUGAM_API_BASE_URL`, `SUGAM_API_KEY`
-- `MD_ONLINE_API_BASE_URL`, `MD_ONLINE_API_KEY`
+## 🛡️ Security
+- **Immutability:** Audit logs are append-only; `UPDATE` and `DELETE` are revoked at the database level.
+- **Authentication:** All requests are secured via `X-API-Key` headers and Keycloak-ready JWT handlers.
+- **Anonymisation:** All data is scrubbed of PII before reaching the LLM or being stored for reviewers.
 
-Do not commit `.env`.
+---
 
-## Keycloak First User
-
-1. Start the stack with `docker compose up --build`.
-2. Open `http://localhost:8080`.
-3. Sign in with `KEYCLOAK_ADMIN_USER` and `KEYCLOAK_ADMIN_PASSWORD` from `.env`.
-4. Create the `swastha-ai` realm if it is not already present.
-5. Create a client named `swastha-ai-api`.
-6. Add client roles: `admin`, `reviewer`, `portal_operator`, `api_client`.
-7. Create the first user, set credentials, and assign the `admin` client role.
-
-For machine-to-machine portal ingestion, configure `API_KEYS` as:
-
-```text
-some-long-random-key:api_client:sugam-portal
-```
+**Developed for the CDSCO Health Innovation Hackathon.**
