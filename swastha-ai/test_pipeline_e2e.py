@@ -14,9 +14,10 @@ import sys
 import time
 
 import httpx
+import os
 
 API = "http://localhost:8000"
-API_KEY = "4ed29acd03b88585355fb1d0be28a9d5"
+API_KEY = os.environ.get("API_KEY", "test_key_for_local_dev")
 HEADERS = {"X-API-Key": API_KEY}
 
 import time as _time

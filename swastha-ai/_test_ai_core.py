@@ -1,5 +1,6 @@
 """Test full pipeline including AI Core."""
 import asyncio
+import os
 import httpx
 
 async def test():
@@ -7,7 +8,7 @@ async def test():
         # Upload a test doc
         r = await c.post(
             "http://localhost:8000/api/v1/ingest/submission",
-            headers={"X-API-Key": "4ed29acd03b88585355fb1d0be28a9d5"},
+            headers={"X-API-Key": os.environ.get("API_KEY", "test_key")},
             files={"file": ("ai_core_test.txt", b"Patient experienced severe adverse reaction to Metformin 500mg. Event: Lactic acidosis. Outcome: Hospitalized. Causality: Probable. Drug was discontinued. Patient age 67 years, female. Onset: 3 days after starting therapy. New report number: 123456789.", "text/plain")},
             data={"submission_type": "sae", "portal_source": "manual"},
         )
@@ -19,7 +20,7 @@ async def test():
             await asyncio.sleep(3)
             r2 = await c.get(
                 f"http://localhost:8000/api/v1/output/submissions/{doc_id}",
-                headers={"X-API-Key": "4ed29acd03b88585355fb1d0be28a9d5"},
+                headers={"X-API-Key": os.environ.get("API_KEY", "test_key")},
             )
             if r2.status_code != 200:
                 print(f"Poll {i+1}: HTTP {r2.status_code}")

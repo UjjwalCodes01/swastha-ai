@@ -12,7 +12,7 @@ export const api = axios.create({
   baseURL: `${BASE_URL}/api/v1/output`,
   headers: {
     'Content-Type': 'application/json',
-    'X-API-Key': '4ed29acd03b88585355fb1d0be28a9d5',
+    'X-API-Key': (import.meta as any).env?.VITE_API_KEY || '',
   },
   timeout: 30_000,
 });
@@ -143,7 +143,7 @@ export const ingestSubmission = async (
     {
       headers: {
         'Content-Type': 'multipart/form-data',
-        'X-API-Key': '4ed29acd03b88585355fb1d0be28a9d5',
+        'X-API-Key': (import.meta as any).env?.VITE_API_KEY || '',
       },
     }
   );
