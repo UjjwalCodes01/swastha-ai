@@ -6,6 +6,7 @@ import SubmissionDetail from './pages/SubmissionDetail';
 import Compliance from './pages/Compliance';
 import Settings from './pages/Settings';
 import Explainability from './pages/Explainability';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -19,6 +20,8 @@ function App() {
           <Route path="compliance" element={<Compliance />} />
           <Route path="explainability" element={<Explainability />} />
           <Route path="settings" element={<Settings />} />
+          {/* 404 catch-all */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>
